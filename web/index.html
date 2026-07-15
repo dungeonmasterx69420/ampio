@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ampio — it really whips the llama's... library</title>
+<link rel="icon" href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'&gt;&lt;rect width='16' height='16' fill='%23232332'/&gt;&lt;path d='M3 12 L6 4 L8 9 L10 4 L13 12' stroke='%23f0c000' stroke-width='2' fill='none'/&gt;&lt;/svg&gt;">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="desktop">
+
+  <!-- ===================== LOGIN ===================== -->
+  <div class="win" id="login-win" style="left:50%;top:120px;transform:translateX(-50%);width:340px;">
+    <div class="titlebar">
+      <div class="tb-stripes"></div>
+      <span class="tbtext">AMPIO :: CONNECT TO NAVIDROME</span>
+      <div class="tb-stripes"></div>
+    </div>
+    <form id="login-form" class="login-body" autocomplete="on">
+      <div class="lcd login-banner">
+        <pre id="login-logo"> /\   |\/|  |__)  |  /\
+/--\  |  |  |     |  \/   v1.0</pre>
+      </div>
+      <label>server url
+        <input type="url" id="login-server" placeholder="https://music.example.com" required spellcheck="false">
+      </label>
+      <label>username
+        <input type="text" id="login-user" autocomplete="username" required spellcheck="false">
+      </label>
+      <label>password
+        <input type="password" id="login-pass" autocomplete="current-password" required>
+      </label>
+      <label class="check"><input type="checkbox" id="login-remember" checked> remember me on this device</label>
+      <div id="login-error" class="login-error" hidden></div>
+      <button type="submit" class="wbtn login-btn">CONNECT</button>
+      <div class="login-hint">Ampio talks to Navidrome over the Subsonic API.<br>
+      If your browser blocks cross-origin requests, run the bundled proxy: <code>node serve.js &lt;server-url&gt;</code></div>
+    </form>
+  </div>
+
+  <!-- ===================== MAIN ===================== -->
+  <div class="win snap" id="main-win" hidden>
+    <div class="titlebar" data-drag="main-win">
+      <div class="tb-stripes"></div>
+      <span class="tbtext">AMPIO</span>
+      <div class="tb-stripes"></div>
+      <div class="tb-btns">
+        <button class="tb-btn" id="btn-logout" title="Disconnect / switch server">&#215;</button>
+      </div>
+    </div>
+    <div class="main-body">
+      <div class="display bevel-in">
+        <div class="display-left">
+          <div class="playstate-row">
+            <span id="playstate" class="playstate">&#9632;</span>
+            <span id="time" class="time">&nbsp;--:--</span>
+          </div>
+          <canvas id="vis" width="152" height="40" title="Click to toggle analyzer / oscilloscope"></canvas>
+        </div>
+        <div class="display-right">
+          <div class="marquee lcd"><div id="marquee-text">AMPIO 1.0 - WINAMP-STYLE NAVIDROME CLIENT *** </div></div>
+          <div class="info-row lcd">
+            <span><b id="kbps">&nbsp;--</b> kbps</span>
+            <span><b id="khz">--</b> khz</span>
+            <span class="chan-ind"><i id="ind-mono">mono</i><i id="ind-stereo">stereo</i></span>
+          </div>
+          <div class="mixer-row">
+            <div class="slider-wrap vol">
+              <input type="range" id="volume" min="0" max="100" value="80" title="Volume">
+            </div>
+            <div class="slider-wrap bal">
+              <input type="range" id="balance" min="-100" max="100" value="0" title="Balance (double-click to center)">
+            </div>
+            <div class="win-toggles">
+              <button class="wbtn tiny" id="btn-eq-toggle" title="Equalizer">EQ</button>
+              <button class="wbtn tiny" id="btn-pl-toggle" title="Playlist">PL</button>
+              <button class="wbtn tiny" id="btn-lib-toggle" title="Media Library">ML</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="seek-row">
+        <input type="range" id="seek" min="0" max="1000" value="0" disabled title="Seek">
+      </div>
+      <div class="controls-row">
+        <div class="transport">
+          <button class="wbtn t-btn" id="btn-prev" title="Previous (Z)">&#9198;</button>
+          <button class="wbtn t-btn" id="btn-play" title="Play (X)">&#9654;</button>
+          <button class="wbtn t-btn" id="btn-pause" title="Pause (C)">&#10073;&#10073;</button>
+          <button class="wbtn t-btn" id="btn-stop" title="Stop (V)">&#9632;</button>
+          <button class="wbtn t-btn" id="btn-next" title="Next (B)">&#9197;</button>
+          <button class="wbtn t-btn eject" id="btn-eject" title="Open Media Library (L)">&#9167;</button>
+        </div>
+        <div class="mode-toggles">
+          <button class="wbtn tiny wide" id="btn-shuffle" title="Shuffle (S)">SHUFFLE</button>
+          <button class="wbtn tiny wide" id="btn-repeat" title="Repeat (R)">REP</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== EQUALIZER ===================== -->
+  <div class="win snap" id="eq-win" hidden>
+    <div class="titlebar" data-drag="eq-win">
+      <div class="tb-stripes"></div>
+      <span class="tbtext">AMPIO EQUALIZER</span>
+      <div class="tb-stripes"></div>
+      <div class="tb-btns"><button class="tb-btn" data-close="eq-win">&#215;</button></div>
+    </div>
+    <div class="eq-body">
+      <div class="eq-top">
+        <button class="wbtn tiny wide" id="eq-on">ON</button>
+        <select id="eq-preset" class="wselect" title="EQ preset">
+          <option value="flat">flat</option>
+          <option value="rock">rock</option>
+          <option value="pop">pop</option>
+          <option value="jazz">jazz</option>
+          <option value="classical">classical</option>
+          <option value="dance">dance</option>
+          <option value="metal">metal</option>
+          <option value="bass">full bass</option>
+          <option value="treble">full treble</option>
+          <option value="headphones">headphones</option>
+        </select>
+      </div>
+      <div class="eq-sliders">
+        <div class="eq-band preamp">
+          <input type="range" class="vslider" id="eq-preamp" min="-12" max="12" value="0" step="0.5" orient="vertical">
+          <span>preamp</span>
+        </div>
+        <div class="eq-spacer"></div>
+        <!-- 10 bands injected by JS -->
+        <div id="eq-bands" class="eq-bands"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== PLAYLIST ===================== -->
+  <div class="win snap" id="pl-win" hidden>
+    <div class="titlebar" data-drag="pl-win">
+      <div class="tb-stripes"></div>
+      <span class="tbtext">AMPIO PLAYLIST</span>
+      <div class="tb-stripes"></div>
+      <div class="tb-btns"><button class="tb-btn" data-close="pl-win">&#215;</button></div>
+    </div>
+    <div class="pl-body">
+      <ol id="pl-list" class="pl-list lcd"></ol>
+      <div class="pl-footer">
+        <div class="pl-btns">
+          <button class="wbtn tiny" id="pl-add" title="Add from Media Library">+ ADD</button>
+          <button class="wbtn tiny" id="pl-rem" title="Remove selected (Del)">- REM</button>
+          <button class="wbtn tiny" id="pl-clear" title="Clear playlist">CLEAR</button>
+          <button class="wbtn tiny" id="pl-crop" title="Keep only selected">CROP</button>
+        </div>
+        <div class="pl-time lcd"><span id="pl-total">0:00/0:00</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== MEDIA LIBRARY ===================== -->
+  <div class="win" id="lib-win" hidden>
+    <div class="titlebar" data-drag="lib-win">
+      <div class="tb-stripes"></div>
+      <span class="tbtext">AMPIO MEDIA LIBRARY</span>
+      <div class="tb-stripes"></div>
+      <div class="tb-btns"><button class="tb-btn" data-close="lib-win">&#215;</button></div>
+    </div>
+    <div class="lib-body">
+      <div class="lib-toolbar">
+        <div class="lib-tabs">
+          <button class="wbtn tiny wide lib-tab active" data-tab="albums">ALBUMS</button>
+          <button class="wbtn tiny wide lib-tab" data-tab="artists">ARTISTS</button>
+          <button class="wbtn tiny wide lib-tab" data-tab="playlists">PLAYLISTS</button>
+        </div>
+        <form id="lib-search-form" class="lib-search">
+          <input type="search" id="lib-search" placeholder="search library..." spellcheck="false">
+        </form>
+      </div>
+      <div class="lib-panes">
+        <div class="lib-pane lcd" id="lib-left"><ul id="lib-left-list"></ul></div>
+        <div class="lib-pane lcd" id="lib-right">
+          <div id="lib-album-header" class="lib-album-header" hidden>
+            <img id="lib-cover" alt="" width="64" height="64">
+            <div>
+              <div id="lib-album-title" class="lib-album-title"></div>
+              <div id="lib-album-sub" class="lib-album-sub"></div>
+            </div>
+          </div>
+          <ul id="lib-right-list"></ul>
+        </div>
+      </div>
+      <div class="lib-footer">
+        <button class="wbtn tiny wide" id="lib-play" title="Replace playlist and play">PLAY</button>
+        <button class="wbtn tiny wide" id="lib-enqueue" title="Append to playlist">ENQUEUE</button>
+        <button class="wbtn tiny wide" id="lib-random" title="Load 50 random songs">RANDOM 50</button>
+        <span id="lib-status" class="lib-status lcd"></span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<audio id="audio" preload="auto"></audio>
+
+<script src="js/md5.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
