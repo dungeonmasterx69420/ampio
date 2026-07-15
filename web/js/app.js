@@ -1118,6 +1118,11 @@
   // ---------------------------------------------------------------
   bindAudioEvents();
 
+  // PWA service worker (needs a secure context: https or localhost)
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(function () { /* http or unsupported */ });
+  }
+
   var saved = LS.get('creds', null);
   if (saved && saved.server && saved.user) {
     $('login-win').hidden = true;

@@ -14,6 +14,7 @@ Pure static HTML/CSS/JS — no build step, no framework, no dependencies. The lo
 - **Draggable windows** with saved positions, z-ordering, and toggle buttons (EQ / PL / ML), just like the old days
 - **Winamp keybindings** — `Z X C V B` transport, `S` shuffle, `R` repeat, `L` library, arrows for seek/volume, `Del` removes from playlist
 - Scrobbles to the server (now-playing + submission at 50%), media-key support via the MediaSession API
+- **Installable PWA** — add it to your home screen / dock and it runs standalone (no browser chrome), with the app shell cached for instant offline loads
 
 ## Running it
 
@@ -36,6 +37,18 @@ If your server sits behind a proxy that strips CORS headers, two options:
 1. **Bundled proxy**: `node serve.js https://music.example.com` — then log in with `http://localhost:8420` as the server URL. Everything is same-origin and all features work.
 2. **Direct anyway**: Ampio detects the CORS failure and falls back to plain `<audio>` playback — music still plays, but the EQ and real analyzer data are disabled (the visualizer switches to simulated bars).
 
+### PWA / installing
+
+Serve Ampio over **HTTPS** (or localhost) and the browser will offer to install it — Chrome/Edge show an install icon in the address bar, iOS Safari uses Share → "Add to Home Screen". Installed, it opens as a standalone window with the Winamp-bolt icon.
+
+What the service worker does:
+
+- **App shell** (HTML/CSS/JS/icons) is cached cache-first, so the player opens instantly and even fully offline (you still need the network to reach your Navidrome server, of course)
+- **Cover art** is cached stale-while-revalidate, capped at 150 entries
+- **Everything else under `/rest`** (auth, browsing, audio streams) goes straight to the network — tokens stay fresh and seeking/range requests keep native behavior
+
+Shipping an update? Bump `VERSION` in `sw.js` — old caches are purged on activation.
+
 ### "Remember me"
 
 Stores the server URL, username, and password (base64-obfuscated, not encrypted) in `localStorage` so you land straight in the player. Skip it on shared machines; the ✕ button on the main window logs out and clears it.
@@ -44,10 +57,13 @@ Stores the server URL, username, and password (base64-obfuscated, not encrypted)
 
 ```
 web/
-├── index.html      # all four windows: login, main, EQ, playlist, library
-├── css/style.css   # the skin — pure CSS, no sprite images
-├── js/md5.js       # minimal RFC 1321 MD5 for Subsonic token auth
-├── js/api.js       # Subsonic/OpenSubsonic API client
-├── js/app.js       # audio engine, EQ, visualizer, playlist, library, window manager
-└── serve.js        # optional zero-dep static server + /rest CORS proxy (Node 18+)
+├── index.html            # all four windows: login, main, EQ, playlist, library
+├── css/style.css         # the skin — pure CSS, no sprite images
+├── js/md5.js             # minimal RFC 1321 MD5 for Subsonic token auth
+├── js/api.js             # Subsonic/OpenSubsonic API client
+├── js/app.js             # audio engine, EQ, visualizer, playlist, library, window manager
+├── sw.js                 # service worker: offline app shell + cover art cache
+├── manifest.webmanifest  # PWA manifest
+├── icons/                # bolt icon (SVG sources + generated PNGs)
+└── serve.js              # optional zero-dep static server + /rest CORS proxy (Node 18+)
 ```

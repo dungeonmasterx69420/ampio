@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="chrome" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3d3d58"/>
+      <stop offset="0.5" stop-color="#232332"/>
+      <stop offset="1" stop-color="#16161f"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe9a0"/>
+      <stop offset="0.45" stop-color="#e8c53f"/>
+      <stop offset="1" stop-color="#8a7420"/>
+    </linearGradient>
+  </defs>
+  <!-- full-bleed background: safe zone is the inner 80% circle -->
+  <rect width="512" height="512" fill="url(#chrome)"/>
+  <g fill="#00e800">
+    <rect x="136" y="348" width="28" height="34"/>
+    <rect x="174" y="326" width="28" height="56"/>
+    <rect x="212" y="358" width="28" height="24"/>
+    <rect x="250" y="314" width="28" height="68"/>
+    <rect x="288" y="340" width="28" height="42"/>
+    <rect x="326" y="322" width="28" height="60"/>
+  </g>
+  <path d="M 300 116 L 180 284 L 244 284 L 202 402 L 342 238 L 270 238 Z"
+        fill="url(#gold)" stroke="#16161f" stroke-width="8" stroke-linejoin="round"/>
+</svg>
