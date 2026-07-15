@@ -6,7 +6,7 @@
      on audio streams keep native handling. */
 'use strict';
 
-var VERSION = 'ampio-shell-v1';
+var VERSION = 'ampio-shell-v2';
 var ART_CACHE = 'ampio-art-v1';
 var ART_MAX_ENTRIES = 150;
 

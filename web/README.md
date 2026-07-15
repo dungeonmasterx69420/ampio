@@ -28,6 +28,16 @@ node serve.js            # http://localhost:8420
 
 Then log in with your Navidrome URL, username, and password. Auth uses the standard Subsonic salted-token scheme (`t = md5(password + salt)`), so the password itself is never sent.
 
+## Security model
+
+- **The password is never stored — anywhere.** At login it is converted once into a Subsonic `{salt, token}` pair (salt from `crypto.getRandomValues`), used for the session, and discarded; the form field is cleared immediately.
+- **"Remember me" stores only the derived token**, AES-GCM-encrypted with a non-extractable WebCrypto key held in IndexedDB, so a casual localStorage dump yields ciphertext. (On plain-HTTP hosts WebCrypto is unavailable; the token pair is then stored unencrypted — but still never the password. Host over HTTPS.) The token is server-revocable: change the account password and it dies.
+- **Auth stays out of URLs where the protocol allows**: JSON API calls send credentials in POST bodies, keeping tokens out of server/proxy access logs. Audio streams and cover art are fetched by `<audio>`/`<img>` tags, which the Subsonic protocol only serves via GET query params — that part is inherent to the protocol.
+- **Content-Security-Policy** (`script-src 'self'`, no inline scripts, `object-src 'none'`) plus a `no-referrer` policy; `serve.js` adds `nosniff`, `X-Frame-Options: DENY`, and `Referrer-Policy` headers.
+- **The service worker never caches authenticated API responses** — only the static app shell and cover art images, and the art cache is keyed by art id (not by token-bearing URL) and wiped on logout, along with the vault and its key.
+- Logging out (the ✕ button) destroys the vault, the encryption key, and the cover-art cache.
+- Upgrading from an earlier Ampio: any old-format stored credential is migrated to a derived token on first load and the original record is deleted.
+
 ### CORS
 
 Navidrome sends CORS headers on its `/rest` endpoints, so connecting directly from the browser normally just works, including the EQ and analyzer.
@@ -48,10 +58,6 @@ What the service worker does:
 - **Everything else under `/rest`** (auth, browsing, audio streams) goes straight to the network — tokens stay fresh and seeking/range requests keep native behavior
 
 Shipping an update? Bump `VERSION` in `sw.js` — old caches are purged on activation.
-
-### "Remember me"
-
-Stores the server URL, username, and password (base64-obfuscated, not encrypted) in `localStorage` so you land straight in the player. Skip it on shared machines; the ✕ button on the main window logs out and clears it.
 
 ## Files
 

@@ -32,11 +32,18 @@ const MIME = {
 async function proxy(req, res) {
   const url = TARGET + req.url;
   try {
-    const upstream = await fetch(url, {
+    const opts = {
       method: req.method,
       headers: { 'accept': req.headers['accept'] || '*/*', 'range': req.headers['range'] || '' },
       redirect: 'follow'
-    });
+    };
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      // Auth params travel in POST bodies (keeps tokens out of URLs/logs)
+      opts.headers['content-type'] = req.headers['content-type'] || 'application/x-www-form-urlencoded';
+      opts.body = req;
+      opts.duplex = 'half';
+    }
+    const upstream = await fetch(url, opts);
     const headers = {};
     for (const h of ['content-type', 'content-length', 'accept-ranges', 'content-range', 'cache-control']) {
       const v = upstream.headers.get(h);
@@ -65,7 +72,12 @@ function serveStatic(req, res) {
   if (!file.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404, { 'content-type': 'text/plain' }); res.end('not found'); return; }
-    res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream' });
+    res.writeHead(200, {
+      'content-type': MIME[path.extname(file)] || 'application/octet-stream',
+      'x-content-type-options': 'nosniff',
+      'referrer-policy': 'no-referrer',
+      'x-frame-options': 'DENY'
+    });
     res.end(data);
   });
 }

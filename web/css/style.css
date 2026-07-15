@@ -200,7 +200,13 @@ input[type=range]:disabled { opacity: .35; cursor: default; }
 
 /* ---------------- Login ---------------- */
 
-#login-win { z-index: 100; }
+#login-win {
+  z-index: 100;
+  left: 50%;
+  top: 120px;
+  transform: translateX(-50%);
+  width: 340px;
+}
 
 .login-body { padding: 14px; display: flex; flex-direction: column; gap: 9px; }
 

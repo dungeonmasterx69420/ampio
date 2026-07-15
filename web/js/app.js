@@ -1050,6 +1050,110 @@
   });
 
   // ---------------------------------------------------------------
+  // Credential vault
+  //
+  // "Remember me" never stores the password — only the derived Subsonic
+  // {salt, token} pair, AES-GCM-encrypted with a non-extractable WebCrypto
+  // key kept in IndexedDB. On plain-HTTP hosts (no crypto.subtle) it falls
+  // back to storing the token pair unencrypted — still never the password.
+  // ---------------------------------------------------------------
+  var Vault = (function () {
+    var DB = 'ampio-vault', STORE = 'keys';
+
+    function hasCrypto() {
+      return !!(window.crypto && window.crypto.subtle && window.indexedDB);
+    }
+
+    function idb() {
+      return new Promise(function (resolve, reject) {
+        var req = indexedDB.open(DB, 1);
+        req.onupgradeneeded = function () { req.result.createObjectStore(STORE); };
+        req.onsuccess = function () { resolve(req.result); };
+        req.onerror = function () { reject(req.error); };
+      });
+    }
+
+    function idbGet(db, key) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(STORE, 'readonly').objectStore(STORE).get(key);
+        tx.onsuccess = function () { resolve(tx.result); };
+        tx.onerror = function () { reject(tx.error); };
+      });
+    }
+
+    function idbPut(db, key, val) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(STORE, 'readwrite').objectStore(STORE).put(val, key);
+        tx.onsuccess = function () { resolve(); };
+        tx.onerror = function () { reject(tx.error); };
+      });
+    }
+
+    function getMasterKey(create) {
+      return idb().then(function (db) {
+        return idbGet(db, 'master').then(function (key) {
+          if (key || !create) return key || null;
+          return crypto.subtle.generateKey(
+            { name: 'AES-GCM', length: 256 },
+            false, // non-extractable: the raw key material never leaves the browser
+            ['encrypt', 'decrypt']
+          ).then(function (fresh) {
+            return idbPut(db, 'master', fresh).then(function () { return fresh; });
+          });
+        });
+      });
+    }
+
+    function b64(buf) {
+      var bytes = new Uint8Array(buf), s = '';
+      for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+      return btoa(s);
+    }
+    function unb64(str) {
+      var s = atob(str), out = new Uint8Array(s.length);
+      for (var i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+      return out;
+    }
+
+    return {
+      save: function (obj) {
+        if (!hasCrypto()) {
+          LS.set('vault', { v: 2, plain: obj });
+          return Promise.resolve();
+        }
+        return getMasterKey(true).then(function (key) {
+          var iv = crypto.getRandomValues(new Uint8Array(12));
+          var data = new TextEncoder().encode(JSON.stringify(obj));
+          return crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, data)
+            .then(function (ct) {
+              LS.set('vault', { v: 2, iv: b64(iv), ct: b64(ct) });
+            });
+        }).catch(function () {
+          // storage/crypto unavailable: skip persistence rather than downgrade
+        });
+      },
+      load: function () {
+        var stored = LS.get('vault', null);
+        if (!stored) return Promise.resolve(null);
+        if (stored.plain) return Promise.resolve(stored.plain);
+        if (!hasCrypto()) return Promise.resolve(null);
+        return getMasterKey(false).then(function (key) {
+          if (!key) return null;
+          return crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: unb64(stored.iv) }, key, unb64(stored.ct)
+          ).then(function (data) {
+            return JSON.parse(new TextDecoder().decode(data));
+          });
+        }).catch(function () { return null; });
+      },
+      clear: function () {
+        LS.del('vault');
+        try { if (window.indexedDB) indexedDB.deleteDatabase(DB); } catch (e) {}
+      }
+    };
+  })();
+
+  // ---------------------------------------------------------------
   // Login / session
   // ---------------------------------------------------------------
   function showApp() {
@@ -1068,17 +1172,19 @@
     audio.volume = vol / 100;
   }
 
-  function tryLogin(server, user, pass, remember, fromSaved) {
-    var client = new SubsonicClient(server, user, pass);
+  // auth = {salt, token}; the password never reaches this function
+  function tryLogin(server, user, auth, remember, fromSaved) {
+    var client = new SubsonicClient(server, user, auth);
     $('login-error').hidden = true;
     return client.ping().then(function () {
       api = client;
-      if (remember) {
-        LS.set('creds', { server: server, user: user, pass: btoa(unescape(encodeURIComponent(pass))) });
-      }
-      showApp();
+      var done = remember
+        ? Vault.save({ server: client.server, user: user, salt: auth.salt, token: auth.token })
+        : Promise.resolve();
+      return done.then(showApp);
     }).catch(function (e) {
       if (fromSaved) {
+        Vault.clear(); // stale/revoked token — don't keep retrying it
         $('login-win').hidden = false;
         $('login-server').value = server;
         $('login-user').value = user;
@@ -1094,20 +1200,26 @@
     e.preventDefault();
     var btn = document.querySelector('.login-btn');
     btn.disabled = true; btn.textContent = 'CONNECTING...';
+    var auth = SubsonicClient.credentials($('login-pass').value);
     tryLogin(
       $('login-server').value.trim(),
       $('login-user').value.trim(),
-      $('login-pass').value,
+      auth,
       $('login-remember').checked
-    ).catch(function () {}).then(function () {
+    ).then(function () {
+      $('login-pass').value = ''; // password is not needed (or kept) past this point
+    }).catch(function () {}).then(function () {
       btn.disabled = false; btn.textContent = 'CONNECT';
     });
   });
 
   $('btn-logout').addEventListener('click', function () {
     stop();
-    LS.del('creds');
+    Vault.clear();
+    if (window.caches) caches.delete('ampio-art-v1'); // cached art reveals the library
     state.playlist = []; state.current = -1;
+    plSelection.clear();
+    api = null;
     WIN_IDS.forEach(function (id) { $(id).hidden = true; });
     $('login-win').hidden = false;
     $('login-pass').value = '';
@@ -1123,14 +1235,26 @@
     navigator.serviceWorker.register('sw.js').catch(function () { /* http or unsupported */ });
   }
 
-  var saved = LS.get('creds', null);
-  if (saved && saved.server && saved.user) {
-    $('login-win').hidden = true;
-    var pass = '';
-    try { pass = decodeURIComponent(escape(atob(saved.pass || ''))); } catch (e) {}
-    tryLogin(saved.server, saved.user, pass, false, true).catch(function () {});
-  } else {
+  // Migrate the legacy v1 credential record (base64 password in localStorage)
+  // to a derived token in the vault, then destroy it.
+  function migrateV1() {
+    var old = LS.get('creds', null);
+    if (!old || !old.server) return Promise.resolve();
+    LS.del('creds');
+    try {
+      var pass = decodeURIComponent(escape(atob(old.pass || '')));
+      var auth = SubsonicClient.credentials(pass);
+      return Vault.save({ server: old.server, user: old.user, salt: auth.salt, token: auth.token });
+    } catch (e) { return Promise.resolve(); /* unreadable record: dropped */ }
+  }
+
+  migrateV1().then(function () { return Vault.load(); }).then(function (saved) {
+    if (saved && saved.server && saved.user && saved.token) {
+      $('login-win').hidden = true;
+      return tryLogin(saved.server, saved.user, { salt: saved.salt, token: saved.token }, false, true)
+        .catch(function () {});
+    }
     // Prefill server with same-origin when served via the bundled proxy
     if (location.protocol.indexOf('http') === 0) $('login-server').value = location.origin;
-  }
+  });
 })();
